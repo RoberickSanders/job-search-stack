@@ -10,7 +10,7 @@ cv:
 
   sections:
     summary:
-      - "Solutions Engineer with 5 years bridging sales and engineering. 3 years SDR/AE at a B2B SaaS startup followed by 2 years as a Solutions Engineer at a CRM company. Comfortable running technical discovery, building demo workflows, and writing scripts to integrate customer systems."
+      - "Solutions Engineer with 5 years bridging sales and engineering. 3 years in outbound sales and account management at a B2B SaaS startup followed by 2 years as a Solutions Engineer at a CRM company. Comfortable running technical discovery, building demo workflows, and writing scripts to integrate customer systems."
 
     experience:
       - company: ExampleCRM Inc.
@@ -39,7 +39,7 @@ cv:
         end_date: 2022-01
         location: Austin, TX
         highlights:
-          - "Top SDR globally three quarters in a row"
+          - "Top outbound performer globally three quarters in a row"
           - "Generated $1.5M in qualified pipeline"
 
     skills:

@@ -2,6 +2,14 @@
 
 An agentic toolchain for job seekers. Find the right hiring manager, tailor your resume to each posting safely, score yourself against the ATS, and apply at scale.
 
+## How it works
+
+![Job search stack architecture](docs/diagram.svg)
+
+A job-search pipeline that works like an outbound GTM motion. It pulls postings from ATS pages and job boards, uses AI to score each one for fit, and looks up the actual hiring manager with a 5-step email and LinkedIn search that filters out HR and recruiter contacts. For the top roles it tailors the resume using only claims already documented, checks it against the posting's ATS keywords, and drafts the outreach. Nothing gets submitted without approval.
+
+The theme-aware drawing above is [`docs/diagram.svg`](docs/diagram.svg). The same figure is also stored as a flat-color SVG ([`docs/diagram.flat.svg`](docs/diagram.flat.svg)), a PNG ([`docs/diagram.png`](docs/diagram.png)), and Mermaid source ([`docs/diagram.mmd`](docs/diagram.mmd)).
+
 ## Try it now (no API keys required)
 
 The fastest way to see the toolchain work:

@@ -1,5 +1,7 @@
 # Architecture
 
+![Job search stack architecture](diagram.svg)
+
 The Vector is a 4-stage pipeline where each stage is independently usable but composes to handle the full apply loop.
 
 ## Stage 1: Discovery (`tools/scrape.py` + `tools/jobspy_pull.py`)
