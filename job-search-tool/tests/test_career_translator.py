@@ -21,7 +21,7 @@ from tools.career_translator import (
 # ============================================================================
 
 def test_build_skills_prompt_includes_resume():
-    resume = "Worked at AcmeCo as SDR, top performer."
+    resume = "Worked at AcmeCo in outbound sales, top performer."
     rubric = "Strong fit: GTM Engineer, RevOps roles."
     prompt = build_skills_prompt(resume, rubric)
     assert "AcmeCo" in prompt
