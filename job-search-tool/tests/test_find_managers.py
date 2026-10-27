@@ -110,27 +110,27 @@ def _candidate(first="Sarah", last="Doe", url="https://linkedin.com/in/sarah",
 # ---------- Domain-match helpers ----------
 
 def test_apex_domain_extracts_last_two_components():
-    assert _apex_domain("aws.amazon.com") == "amazon.com"
-    assert _apex_domain("amazon.com") == "amazon.com"
-    assert _apex_domain("mail.subdomain.langchain.com") == "langchain.com"
-    assert _apex_domain("langchain.com.") == "langchain.com"  # trailing dot
+    assert _apex_domain("sub.example.com") == "example.com"
+    assert _apex_domain("example.com") == "example.com"
+    assert _apex_domain("mail.sub.example.com") == "example.com"
+    assert _apex_domain("example.com.") == "example.com"  # trailing dot
     assert _apex_domain("") == ""
 
 
 def test_apex_domain_lowercases():
-    assert _apex_domain("Amazon.COM") == "amazon.com"
+    assert _apex_domain("Example.COM") == "example.com"
 
 
 def test_domains_match_accepts_subdomain_to_apex():
-    """AWS lookup with email at subdomain should be allowed."""
-    assert _domains_match("amazon.com", "jen@aws.amazon.com") is True
-    assert _domains_match("aws.amazon.com", "jen@amazon.com") is True
+    """Lookup at the apex should accept an email on a subdomain."""
+    assert _domains_match("example.com", "jane.doe@sub.example.com") is True
+    assert _domains_match("sub.example.com", "jane.doe@example.com") is True
 
 
 def test_domains_match_rejects_different_company():
-    """The actual bug: AWS lookup returned jens@indeed.com -> reject."""
-    assert _domains_match("amazon.com", "jens@indeed.com") is False
-    assert _domains_match("aws.amazon.com", "jens@indeed.com") is False
+    """Lookup for example.com returned jane.doe@example.org -> reject."""
+    assert _domains_match("example.com", "jane.doe@example.org") is False
+    assert _domains_match("sub.example.com", "jane.doe@example.org") is False
 
 
 def test_domains_match_handles_bad_input():
@@ -146,13 +146,13 @@ def test_find_via_blitz_rejects_domain_mismatch():
     increment blitz_domain_mismatch."""
     counters = {}
     with patch("tools.find_managers.domain_to_linkedin",
-               return_value="https://linkedin.com/company/aws"), \
+               return_value="https://linkedin.com/company/example"), \
          patch("tools.find_managers.find_employees_by_title",
-               return_value=[_candidate(first="Jen", last="Sun")]), \
+               return_value=[_candidate(first="Jane", last="Doe")]), \
          patch("tools.find_managers.linkedin_to_email",
-               return_value="jens@indeed.com"), \
+               return_value="jane.doe@example.org"), \
          patch("tools.find_managers.verify_email_mv") as mv:
-        email, name, linkedin, source = find_via_blitz("amazon.com", counters=counters)
+        email, name, linkedin, source = find_via_blitz("example.com", counters=counters)
     assert (email, name, linkedin, source) == ("", "", "", "")
     assert counters.get("blitz_domain_mismatch") == 1
     # MV not called — the guard short-circuits before MV verify
@@ -162,19 +162,19 @@ def test_find_via_blitz_rejects_domain_mismatch():
 def test_find_via_blitz_skips_mismatch_then_accepts_match():
     """Two candidates: first has wrong-domain email, second has right-domain."""
     cands = [
-        _candidate(first="Jen", last="Sun", url="https://linkedin.com/in/jen", icp_tier=1),
-        _candidate(first="Real", last="Hire", url="https://linkedin.com/in/real", icp_tier=2),
+        _candidate(first="Pat", last="Lee", url="https://linkedin.com/in/pat-lee", icp_tier=1),
+        _candidate(first="Jane", last="Doe", url="https://linkedin.com/in/jane-doe", icp_tier=2),
     ]
     counters = {}
     with patch("tools.find_managers.domain_to_linkedin",
-               return_value="https://linkedin.com/company/amazon"), \
+               return_value="https://linkedin.com/company/example"), \
          patch("tools.find_managers.find_employees_by_title", return_value=cands), \
          patch("tools.find_managers.linkedin_to_email",
-               side_effect=["jens@indeed.com", "real@amazon.com"]), \
+               side_effect=["pat.lee@example.org", "jane.doe@example.com"]), \
          patch("tools.find_managers.verify_email_mv", return_value=True):
-        email, name, linkedin, source = find_via_blitz("amazon.com", counters=counters)
-    assert email == "real@amazon.com"
-    assert name == "Real Hire"
+        email, name, linkedin, source = find_via_blitz("example.com", counters=counters)
+    assert email == "jane.doe@example.com"
+    assert name == "Jane Doe"
     assert source == "blitz+mv_ok"
     assert counters.get("blitz_domain_mismatch") == 1
 
@@ -182,14 +182,14 @@ def test_find_via_blitz_skips_mismatch_then_accepts_match():
 def test_find_via_blitz_accepts_subdomain_email():
     """Email at subdomain of target should pass guard."""
     with patch("tools.find_managers.domain_to_linkedin",
-               return_value="https://linkedin.com/company/amazon"), \
+               return_value="https://linkedin.com/company/example"), \
          patch("tools.find_managers.find_employees_by_title",
                return_value=[_candidate()]), \
          patch("tools.find_managers.linkedin_to_email",
-               return_value="sarah@aws.amazon.com"), \
+               return_value="jane.doe@sub.example.com"), \
          patch("tools.find_managers.verify_email_mv", return_value=True):
-        email, name, linkedin, source = find_via_blitz("amazon.com")
-    assert email == "sarah@aws.amazon.com"
+        email, name, linkedin, source = find_via_blitz("example.com")
+    assert email == "jane.doe@sub.example.com"
     assert source == "blitz+mv_ok"
 
 
@@ -416,12 +416,12 @@ def test_format_summary_counts_each_source():
 def test_hunter_domain_returns_empty_when_no_hiring_keyword_match(monkeypatch):
     """Regression test for the silent-failure bug surfaced 2026-04-29.
 
-    On the Webflow cascade run, no employee at webflow.com matched the
-    hiring-position keyword filter. The OLD code fell back to "first
-    high-confidence personal email" and surfaced a Senior Director of
-    Product Marketing as a 'hiring manager' for a Forward Deployed
-    Engineer search. New code returns empty in this case so the cascade
-    can move to Icypeas / permutator instead of shipping a bad contact.
+    No employee at example.com matched the hiring-position keyword
+    filter. The OLD code fell back to "first high-confidence personal
+    email" and surfaced a Senior Director of Product Marketing as a
+    'hiring manager' for a Forward Deployed Engineer search. New code
+    returns empty in this case so the cascade can move to Icypeas /
+    permutator instead of shipping a bad contact.
     """
     monkeypatch.setenv("HUNTER_API_KEY", "test-key")
     fm._DOMAIN_CACHE.clear()
@@ -432,18 +432,18 @@ def test_hunter_domain_returns_empty_when_no_hiring_keyword_match(monkeypatch):
         "data": {
             "emails": [
                 # Senior PMM person — high confidence, personal, but NOT hiring-related
-                {"value": "vikas.bhagat@webflow.com", "first_name": "Vikas",
-                 "last_name": "Bhagat", "type": "personal", "confidence": 99,
+                {"value": "alex.kim@example.com", "first_name": "Alex",
+                 "last_name": "Kim", "type": "personal", "confidence": 99,
                  "position": "Senior Director, Head of Product Marketing"},
                 # Random sales person — high confidence, personal, NOT hiring-related
-                {"value": "joe.sales@webflow.com", "first_name": "Joe",
+                {"value": "joe.sales@example.com", "first_name": "Joe",
                  "last_name": "Sales", "type": "personal", "confidence": 95,
                  "position": "Account Executive"},
             ]
         }
     }
     with patch("tools.find_managers.requests.get", return_value=mock_resp):
-        result = fm.find_via_hunter_domain("webflow.com")
+        result = fm.find_via_hunter_domain("example.com")
 
     assert result == ("", "", "", ""), (
         f"Expected empty result when no hiring-keyword match; "
@@ -503,26 +503,25 @@ def test_hunter_domain_returns_empty_on_zero_emails(monkeypatch):
 # ---------- Blitz title-relevance filter (regression for 2026-04-29) ----------
 
 def test_find_via_blitz_filters_irrelevant_titles():
-    """Regression for the Yezi/Glean silent-failure 2026-04-29.
+    """Regression: a 'VP of Strategy & Ops' title must be dropped.
 
-    Blitz returned 'VP of Strategy & Ops' for a Solutions Engineer role
-    search at Glean, because Blitz's _bucket_titles used 'vp' as a
-    prefix keyword and matched any 'VP of [anything]'. The new
-    title-relevance filter drops these wrong-target candidates after
-    the API returns them.
+    Blitz returned that title for a Solutions Engineer search because
+    _bucket_titles used 'vp' as a prefix keyword and matched any
+    'VP of [anything]'. The title-relevance filter drops these
+    wrong-target candidates after the API returns them.
     """
     counters = {}
     cands = [
         # Wrong-target: VP of Strategy & Ops at the company
-        _candidate(first="Yezi", last="Peng", title="VP of Strategy & Ops",
-                   url="https://linkedin.com/in/yezi", icp_tier=1),
+        _candidate(first="Alex", last="Kim", title="VP of Strategy & Ops",
+                   url="https://linkedin.com/in/alex-kim", icp_tier=1),
     ]
     with patch("tools.find_managers.domain_to_linkedin",
-               return_value="https://linkedin.com/company/glean"), \
+               return_value="https://linkedin.com/company/example"), \
          patch("tools.find_managers.find_employees_by_title", return_value=cands), \
          patch("tools.find_managers.linkedin_to_email") as l2e, \
          patch("tools.find_managers.verify_email_mv") as mv:
-        result = find_via_blitz("glean.com", counters=counters)
+        result = find_via_blitz("example.com", counters=counters)
 
     assert result == ("", "", "", "")
     assert counters.get("blitz_irrelevant_titles") == 1
@@ -601,7 +600,7 @@ def test_has_relevant_title_basic():
 
 
 def test_has_relevant_title_disqualifies_ops_comp_strategy():
-    """Regression for the Twilio/Alex Gousinov bug 2026-04-29.
+    """Regression: a sales-compensation title used to pass the whitelist.
 
     Before the disqualifier list was added, "Sr Manager, Sales
     Compensation" passed _has_relevant_title because the positive
@@ -647,26 +646,26 @@ def test_has_relevant_title_disqualifies_ops_comp_strategy():
 
 
 def test_has_relevant_title_disqualifies_hr_recruiting_people():
-    """Regression for the Tara/Summer/Brooke wrong-target sample 2026-04-29.
+    """Regression: HR and recruiting titles must not pass as hiring managers.
 
-    blitz+mv_ok shipped these three as 'hiring managers' for SE / FDE
-    candidate searches because Blitz's HIRING_MANAGER_TITLES fallback
-    bucket includes Head of Talent / Head of People as last-resort
-    search targets, and the post-filter previously accepted any title
-    containing 'talent' or 'people' as a positive keyword. Those
-    contacts are HR / recruiting / people-ops generalists, NOT
+    blitz+mv_ok shipped people-ops and recruiting titles as 'hiring
+    managers' for SE / FDE searches because Blitz's HIRING_MANAGER_TITLES
+    fallback bucket includes Head of Talent / Head of People as
+    last-resort search targets, and the post-filter previously accepted
+    any title containing 'talent' or 'people' as a positive keyword.
+    Those contacts are HR / recruiting / people-ops generalists, NOT
     engineering hiring managers.
     """
     from tools.find_managers import _has_relevant_title
 
-    # FAIL: the actual bug-sample candidates
-    # Tara Murray (Webflow) — RevOps. Already covered by revenue-ops
-    # disqualifier; included for the cohort completeness check.
+    # FAIL: the bug-sample title shapes
+    # RevOps. Already covered by the revenue-ops disqualifier; included
+    # for the cohort completeness check.
     assert _has_relevant_title("VP Revenue Operations") is False
-    # Summer Edstrom (Hex) — recruiter dressed as "Talent Lead"
+    # Recruiter dressed as "Talent Lead"
     assert _has_relevant_title("Talent Lead") is False
     assert _has_relevant_title("Senior Talent Lead") is False
-    # Brooke Worzalla (Drata) — HR generalist
+    # HR generalist
     assert _has_relevant_title("Head of People") is False
 
     # FAIL: HR / People-Ops phrase variants
@@ -714,7 +713,7 @@ def test_has_relevant_title_disqualifies_hr_recruiting_people():
 
 
 def test_find_via_blitz_filters_hr_candidates():
-    """End-to-end Blitz cascade test with the Tara/Summer/Brooke shape.
+    """End-to-end Blitz cascade test with the HR / recruiting title shapes.
 
     Blitz returns 3 candidates: VP Revenue Operations, Talent Lead, and
     Head of People. All three must be filtered by the post-filter
@@ -723,15 +722,15 @@ def test_find_via_blitz_filters_hr_candidates():
     """
     counters = {}
     cands = [
-        # Tara-shaped: RevOps
-        _candidate(first="Tara", last="Murray", title="VP Revenue Operations",
-                   url="https://linkedin.com/in/tara", icp_tier=1),
-        # Summer-shaped: recruiter as "Talent Lead"
-        _candidate(first="Summer", last="Edstrom", title="Talent Lead",
-                   url="https://linkedin.com/in/summer", icp_tier=2),
-        # Brooke-shaped: HR generalist
-        _candidate(first="Brooke", last="Worzalla", title="Head of People",
-                   url="https://linkedin.com/in/brooke", icp_tier=2),
+        # RevOps
+        _candidate(first="Riley", last="Chen", title="VP Revenue Operations",
+                   url="https://linkedin.com/in/riley-chen", icp_tier=1),
+        # Recruiter dressed as "Talent Lead"
+        _candidate(first="Sam", last="Patel", title="Talent Lead",
+                   url="https://linkedin.com/in/sam-patel", icp_tier=2),
+        # HR generalist
+        _candidate(first="Jordan", last="Blake", title="Head of People",
+                   url="https://linkedin.com/in/jordan-blake", icp_tier=2),
     ]
     with patch("tools.find_managers.domain_to_linkedin",
                return_value="https://linkedin.com/company/acme"), \
@@ -754,32 +753,32 @@ def test_find_via_blitz_picks_engineer_over_hr_in_mixed_list():
     """
     cands = [
         # HR — must be filtered
-        _candidate(first="Brooke", last="HR", title="Head of People",
-                   url="https://linkedin.com/in/brooke", icp_tier=1),
+        _candidate(first="Jordan", last="Blake", title="Head of People",
+                   url="https://linkedin.com/in/jordan-blake", icp_tier=1),
         # Recruiter — must be filtered
-        _candidate(first="Summer", last="TA", title="Senior Recruiter",
-                   url="https://linkedin.com/in/summer", icp_tier=1),
-        # Real engineering hiring manager — must win
-        _candidate(first="Anwesh", last="Rijal",
+        _candidate(first="Sam", last="Patel", title="Senior Recruiter",
+                   url="https://linkedin.com/in/sam-patel", icp_tier=1),
+        # Engineering hiring manager — must win
+        _candidate(first="Jane", last="Doe",
                    title="Head of Solutions Engineering",
-                   url="https://linkedin.com/in/anwesh", icp_tier=2),
+                   url="https://linkedin.com/in/jane-doe", icp_tier=2),
     ]
     with patch("tools.find_managers.domain_to_linkedin",
-               return_value="https://linkedin.com/company/glean"), \
+               return_value="https://linkedin.com/company/example"), \
          patch("tools.find_managers.find_employees_by_title", return_value=cands), \
          patch("tools.find_managers.linkedin_to_email",
-               return_value="anwesh@glean.com"), \
+               return_value="jane.doe@example.com"), \
          patch("tools.find_managers.verify_email_mv", return_value=True):
-        email, name, _, source = find_via_blitz("glean.com")
-    assert email == "anwesh@glean.com"
-    assert name == "Anwesh Rijal"
+        email, name, _, source = find_via_blitz("example.com")
+    assert email == "jane.doe@example.com"
+    assert name == "Jane Doe"
     assert source == "blitz+mv_ok"
 
 
 # ---------- Regional variant detection (multi-posting bug, 2026-04-29) ----------
 
 def test_detect_regional_variant_east_coast():
-    """The original bug case: n8n's 'East Coast' SE posting must be detected."""
+    """A title with an East Coast marker must be detected."""
     assert fm._detect_regional_variant(
         "Senior Solutions Engineer | East Coast - Remote"
     ) == "east_coast"
@@ -788,7 +787,7 @@ def test_detect_regional_variant_east_coast():
 
 
 def test_detect_regional_variant_west_coast():
-    """The wrong-region paired posting from the same n8n bug."""
+    """The paired West Coast posting from the same multi-posting case."""
     assert fm._detect_regional_variant(
         "Senior Solutions Engineer | West Coast - Remote"
     ) == "west_coast"
@@ -899,22 +898,22 @@ def test_multi_posting_two_regions_each_gets_role_specific_blitz(
     wins.
     """
     df = _make_master_df([
-        {"company": "n8n", "title": "Senior Solutions Engineer | East Coast - Remote",
-         "company_url": "https://n8n.io", "fit_score": 9.0},
-        {"company": "n8n", "title": "Senior Solutions Engineer | West Coast - Remote",
-         "company_url": "https://n8n.io", "fit_score": 8.5},
+        {"company": "Example", "title": "Senior Solutions Engineer | East Coast - Remote",
+         "company_url": "https://example.com", "fit_score": 9.0},
+        {"company": "Example", "title": "Senior Solutions Engineer | West Coast - Remote",
+         "company_url": "https://example.com", "fit_score": 8.5},
     ])
     df.to_excel(_tmp_master_env, index=False)
 
-    # Blitz: same domain, but in this scenario it returns Hernan first — for
+    # Blitz: same domain, and in this scenario it returns Jane Doe — for
     # the test we just confirm Blitz wins both rows. (The cascade caches Blitz
     # candidates by domain, so both rows see the same result; what matters
     # is that the Hunter fallback is NEVER reached when Blitz hits.)
     monkeypatch.setattr(
         fm, "find_via_blitz",
         lambda domain, counters=None: (
-            "hernan@n8n.io", "Hernan Echeverry",
-            "https://linkedin.com/in/hernan", "blitz+mv_ok",
+            "jane.doe@example.com", "Jane Doe",
+            "https://linkedin.com/in/jane-doe", "blitz+mv_ok",
         ),
     )
     # Hunter / Icypeas must NOT be called (Blitz hit short-circuits).
@@ -933,7 +932,7 @@ def test_multi_posting_two_regions_each_gets_role_specific_blitz(
     assert len(out) == 2
     # Both rows pick Blitz; the regional flag never blocks because Blitz hit.
     assert all(out["manager_source"] == "blitz+mv_ok")
-    assert all(out["manager_email"] == "hernan@n8n.io")
+    assert all(out["manager_email"] == "jane.doe@example.com")
     assert hunter_call_count["n"] == 0
 
 
@@ -985,9 +984,9 @@ def test_multi_posting_blocks_hunter_domain_fallback(
     manager_source 'multi_posting_blocked:<region>'.
     """
     df = _make_master_df([
-        {"company": "n8n",
+        {"company": "Example",
          "title": "Senior Solutions Engineer | West Coast - Remote",
-         "company_url": "https://n8n.io", "fit_score": 8.5},
+         "company_url": "https://example.com", "fit_score": 8.5},
     ])
     df.to_excel(_tmp_master_env, index=False)
 
@@ -1000,13 +999,13 @@ def test_multi_posting_blocks_hunter_domain_fallback(
     hunter_calls = {"n": 0}
     def _hunter_must_not_run(domain):
         hunter_calls["n"] += 1
-        return ("elena@n8n.io", "Elena Ayvazyan",
+        return ("sam.patel@example.com", "Sam Patel",
                 "hunter_domain+conf99", "Talent Acquisition Manager")
     monkeypatch.setattr(fm, "find_via_hunter_domain", _hunter_must_not_run)
     icypeas_calls = {"n": 0}
     def _icypeas_must_not_run(domain):
         icypeas_calls["n"] += 1
-        return ("ip@n8n.io", "I P", "icypeas_domain+mv_ok", "Recruiter")
+        return ("pat.lee@example.com", "Pat Lee", "icypeas_domain+mv_ok", "Recruiter")
     monkeypatch.setattr(fm, "find_via_icypeas_domain", _icypeas_must_not_run)
     monkeypatch.setattr(fm, "verify_email_mv", lambda email: True)
 

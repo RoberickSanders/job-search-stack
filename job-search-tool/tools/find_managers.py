@@ -107,7 +107,7 @@ HIRING_MANAGER_TITLES = [
 # Role-relevant keyword whitelist applied to Blitz response titles AFTER
 # the API returns candidates. Prevents Blitz's loose matching from leaking
 # wrong-org seniors through (e.g., on 2026-04-29 Blitz returned a "VP of
-# Strategy & Ops" at Glean as a hit for "VP Sales / VP Revenue / VP GTM /
+# Strategy & Ops" as a hit for "VP Sales / VP Revenue / VP GTM /
 # VP Engineering" search because the bucketing keyword "vp" matched any
 # "VP of [anything]"). A candidate's actual title MUST contain at least
 # one of these keywords; otherwise drop them as a wrong-target match.
@@ -191,7 +191,7 @@ def _has_relevant_title(title: str) -> bool:
     1. Disqualifier check (negative): rejects ops/comp/strategy titles
        that would otherwise pass the positive whitelist on substrings
        like "sales" or "marketing" (e.g., "Sr Manager, Sales
-       Compensation" at Twilio is comp ops, NOT the SE hiring manager).
+       Compensation" is comp ops, NOT the SE hiring manager).
     2. Positive keyword check: must contain at least one role-relevant
        keyword (e.g., "VP of Strategy & Ops" still fails this).
     """
@@ -251,7 +251,7 @@ def _detect_regional_variant(title: str) -> str | None:
     'north_america', 'europe', 'americas', 'us', 'uk', 'germany',
     'france', or None.
 
-    Used by the cascade to detect multi-posting roles (e.g., n8n posts
+    Used by the cascade to detect multi-posting roles (e.g., one company posts
     "Senior Solutions Engineer | East Coast" and "...| West Coast" with
     different regional managers per posting). When present, the cascade
     blocks domain-search fallbacks (Hunter / Icypeas domain) because
@@ -279,8 +279,8 @@ _ICYPEAS_DOMAIN_CACHE: dict[str, list[dict]] = {}
 def _apex_domain(d: str) -> str:
     """Return the last 2 dot-separated components of a hostname.
 
-    Naive but adequate for US-tech orgs (amazon.com, langchain.com,
-    aws.amazon.com -> amazon.com). Doesn't handle .co.uk / .com.au;
+    Naive but adequate for two-label domains (example.com,
+    sub.example.com -> example.com). Doesn't handle .co.uk / .com.au;
     swap to tldextract if we ever need to. Empty input -> empty string.
     """
     if not d:
@@ -295,7 +295,8 @@ def _domains_match(target: str, email: str) -> bool:
     """True when `email`'s apex domain == `target`'s apex domain.
 
     Used by the Blitz cascade to reject "Blitz returned a candidate's email
-    at a different company" cases (the AWS->jens@indeed.com bug).
+    at a different company" cases (an example.com lookup returned
+    jane.doe@example.org).
     """
     if not target or not email or "@" not in email:
         return False
@@ -411,7 +412,7 @@ def find_via_hunter_domain(domain: str) -> tuple[str, str, str, str]:
     # Find first email whose position matches a hiring-related keyword.
     # If no match, return empty — DO NOT fall back to "any high-confidence
     # personal email" because that path silently surfaces wrong-org contacts
-    # (e.g., Webflow returned a Senior Director of Product Marketing for a
+    # (e.g., a Senior Director of Product Marketing returned for a
     # Forward Deployed Engineer role search on 2026-04-29). Better to report
     # "no manager found" and let the cascade move to Icypeas / permutator
     # than to ship a wrong-audience contact downstream.
@@ -432,7 +433,7 @@ def find_via_hunter_domain(domain: str) -> tuple[str, str, str, str]:
 
     # No hiring-keyword match — return empty. The dangerous fallback to
     # "first high-confidence personal email" was removed 2026-04-29 after
-    # surfacing a PMM Senior Director as a "hiring manager" for the Webflow
+    # surfacing a PMM Senior Director as a "hiring manager" for an
     # FDE role.
     _DOMAIN_CACHE[domain] = ("", "", "", "")
     return _DOMAIN_CACHE[domain]
@@ -546,10 +547,10 @@ def find_via_blitz(
         if not email:
             continue
         # Domain-match guard: Blitz sometimes returns a candidate's secondary
-        # email at a different employer (e.g., AWS lookup -> jens@indeed.com
-        # because Jen Sun used to work at Indeed). Reject when the email's apex
-        # doesn't match the target domain's apex. amazon.com / aws.amazon.com
-        # share apex 'amazon.com' so subsidiaries still pass.
+        # email at a different employer (e.g., an example.com lookup returns
+        # jane.doe@example.org). Reject when the email's apex doesn't match
+        # the target domain's apex. example.com / sub.example.com share apex
+        # 'example.com' so subsidiaries still pass.
         if not _domains_match(domain, email):
             if counters is not None:
                 counters["blitz_domain_mismatch"] = (
@@ -705,10 +706,13 @@ def main():
         print("No fit_score column. Run tools/score.py first.")
         return
 
-    # New columns if missing
+    # New columns if missing. Empty cells round-trip from Excel as float64,
+    # which rejects a later string assignment, so force object dtype.
     for col in ("manager_name", "manager_email", "manager_linkedin", "manager_source"):
         if col not in df.columns:
-            df[col] = pd.NA
+            df[col] = pd.Series(pd.NA, index=df.index, dtype="object")
+        else:
+            df[col] = df[col].astype("object")
 
     # Pick top-N jobs by fit_score that don't yet have a manager_email
     candidates = df[
@@ -802,9 +806,9 @@ def main():
         # and "West Coast" postings of the same role, silently routing the
         # wrong-region manager. Force the row to surface as
         # multi_posting_blocked so it gets a manual lookup. Bug surfaced
-        # 2026-04-29: n8n's West Coast SE posting matched to Elena (TA via
-        # hunter_domain) when the user (in EST) should have been routed to
-        # Hernan via the East Coast posting.
+        # 2026-04-29: a West Coast posting matched a talent contact via
+        # hunter_domain when the East Coast posting should have been routed
+        # to a different manager.
         if region_variant:
             df.at[idx, "manager_source"] = f"multi_posting_blocked:{region_variant}"
             print(
